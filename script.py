@@ -1,41 +1,53 @@
 import requests
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from colorama import Fore, Back, Style
+
+# Create a session
+session = requests.Session()
+
+# Define a retry strategy
+retry_strategy = Retry(
+    total=5,  # Total number of retries
+    backoff_factor=1,  # Waits 1 second between retries, then 2s, 4s, 8s...
+    status_forcelist=[429, 500, 502, 503, 504],  # Status codes to retry on
+    method_whitelist=["HEAD", "GET", "OPTIONS"]  # Methods to retry
+)
+
 url = "http://192.168.56.103/.hidden/"
 i = 0
 
-def url_join(path):
-    new_url = url + path
-    return new_url
+adapter = HTTPAdapter(max_retries=retry_strategy)
+session.mount("http://", adapter)
+session.mount("https://", adapter)
 
-def get_hidden_file(new_url, path):
-
-    new_url += path
-    response =  requests.get(new_url)
-    print("get", new_url)
+def get_hidden_file(path):
+    global url
+    url += path
+    response =  session.get(url)
+    print("current link:", url)
     soup = BeautifulSoup(response.content, 'html.parser')
 
     links = soup.find_all("a")
-    # print("get all links", links)
     for x in range(len(links)):
         global i
         i = i + 1
-        print("into", links[x].get("href"), i)
-        if(links[x].get("href") == '../' ):
+        href = links[x].get("href")
+        if(href == '../' ):
             continue
 
-        if(links[x].get("href") == 'README'):
-            new_url += "README"
-            response =  requests.get(new_url)
+        if(href == 'README'):
+            response =  session.get(url + "README")
             text = response.text
-            # print(text)
             if "flag" in text:
-                print("flag trouve:", flag)
-                return
+                print(Fore.GREEN, text, "in path", url)
+                exit(0)
             else:
+                url = url.replace(path, '')
                 return
-        # print("entering a new file")
-        get_hidden_file(new_url, links[x].get("href"))
+        get_hidden_file(href)
 
         
 
-get_hidden_file(url, "")
+get_hidden_file("")
